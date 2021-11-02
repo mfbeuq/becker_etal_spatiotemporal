@@ -1,0 +1,832 @@
+---
+title: "Combined trial figures"
+output: html_document
+---
+
+
+# Bacterial community analysis
+### **Becker *et al.* "Spatio-temporal variation"**
+
+-----------------
+
+This document contains all statistical analyses conducted for the manuscript. Note that due to the random iterative nature of some analyses (such as PERMANOVA, CAP & PCA) some of the figure parameters will change slightly during reanalysis, though core results will remain essentially unchanged. 
+
+All data to reproduce analysis can be found here: `https://github.com/mfbeuq/becker_etal_spatiotemporal`
+
+-----------------
+
+Load necessary ecological analysis libraries. 
+
+```{r,cache=TRUE, message=FALSE}
+library(phyloseq)
+library(microbiome)
+library(ggord)
+library(metagMisc)
+library(ggpubr)
+library(FSA)
+library(knitr)
+library(rmarkdown)
+library(ape)
+library(vegan)
+library(philr)
+library(compositions)
+library(qiime2R)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(PMCMR)
+library(tibble)
+library(viridis)
+library(gridExtra)
+library(AcidPlots)
+library(grid)
+library(colorRamps)
+library(rstatix)
+library(dunn.test)
+library(pairwiseAdonis)
+library(dplyr)
+library(ANCOMBC)
+library(nlme)
+library(tidyverse)
+library(compositions)
+library(readr)
+library(DT)
+library(matrixStats)
+library(pheatmap)
+library(RColorBrewer)
+library(dendsort)
+library(ComplexHeatmap)
+library(circlize)
+library(round)
+library(ggplot2)
+library(data.table)
+library(forcats)
+
+set.seed(225)
+```
+
+
+This beginning workspace contains: 
+
+* `spatial`: phyloseq object including the metadata, and the ASV table, the taxonomy table and the phylogenetic tree, all three created by QIIME2, for the spatial trial
+* `temporal`: phyloseq object including the metadata, and the ASV table, the taxonomy table and the phylogenetic tree, all three created by QIIME2, for the temporal trial
+* `st.trial`: phyloseq object including the metadata, and the ASV table, the taxonomy table and the phylogenetic tree, all three created by QIIME2, for the spatio-temporal trial
+* `colorcodes`: a list of colors assigned to the phyla, classes and orders 
+
+
+```{r,cache=TRUE}
+load('combined_plots.RData')
+```
+
+Load functions neccessary:
+```{r,cache=TRUE}
+source('functions.R')
+```
+
+
+--------------------
+
+### Relative abundance barplot at family level:
+
+**Figure 1 A**  
+
+First transform the absolute abundances to relative abundances and merge the samples to their regarding root compartment (L- or T-compartment). Then glomerate the taxonomic levels at family level. Then extract only the necessary metadata columns into order to bind the three datasets into one large table. Furthermore add a column which specifies to which compartment and trial the data belongs to. Also assign each family with a relative abundance of less then 2% as "other".
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide', warning=FALSE}
+DLR <- st.trial %>%
+  microbiome::transform("compositional") %>%
+  merge_samples("compartment") %>%
+  transform_sample_counts(function(x) 100 * x/sum(x)) %>%
+  tax_glom(taxrank = "F", NArm = FALSE)
+K <- temporal %>%
+  microbiome::transform("compositional") %>%
+  merge_samples("compartment") %>%
+  transform_sample_counts(function(x) 100 * x/sum(x)) %>%
+  tax_glom(taxrank = "F", NArm = FALSE)
+spat <- spatial %>%
+  microbiome::transform("compositional") %>%
+  merge_samples("compartment") %>%
+  transform_sample_counts(function(x) 100 * x/sum(x)) %>%
+  tax_glom(taxrank = "Family", NArm = FALSE)
+
+dat_taxa <- data.table(psmelt(K))
+dat_taxa$F <- as.character(dat_taxa$F)
+medians <- dat_taxa[, mean := mean(Abundance, na.rm = TRUE), by = "F"]
+dat_taxa[is.na(dat_taxa)] <- "Unclassified" 
+dat_taxa <- dat_taxa[,-c(1,4:18)]
+dat_taxa$trial <- as.character("K")
+dat_taxa$axis <- as.character(paste0(dat_taxa$trial,"-",dat_taxa$Sample))
+remainder1 <- dat_taxa[(mean <= 2), F := "Other"]
+remainder1 <- remainder1[,-c(3)]
+
+dat_taxa <- data.table(psmelt(DLR))
+dat_taxa$F <- as.character(dat_taxa$F)
+medians <- dat_taxa[, mean := mean(Abundance, na.rm = TRUE), by = "F"]
+dat_taxa[is.na(dat_taxa)] <- "Unclassified" 
+dat_taxa <- dat_taxa[,-c(1,4:20)]
+dat_taxa$trial <- as.character("DLR")
+dat_taxa$axis <- as.character(paste0(dat_taxa$trial,"-",dat_taxa$Sample))
+remainder2 <- dat_taxa[(mean <= 2), F := "Other"]
+remainder2 <- remainder2[,-c(3:5)]
+
+dat_taxa <- data.table(psmelt(spat))
+dat_taxa <- dat_taxa[,-c(1,4:14)]
+colnames(dat_taxa) <- c("Sample","Abundance","P","C","O","F")
+dat_taxa$F <- as.character(dat_taxa$F)
+medians <- dat_taxa[, mean := mean(Abundance, na.rm = TRUE), by = "F"]
+dat_taxa[is.na(dat_taxa)] <- "Unclassified" 
+dat_taxa$trial <- as.character("Spat")
+dat_taxa$axis <- as.character(paste0(dat_taxa$trial,"-",dat_taxa$Sample))
+remainder3 <- dat_taxa[(mean <= 2), F := "Other"]
+
+remove(remainder)
+remainder <- rbind(remainder1, remainder2, remainder3)
+remainder <-remainder[!(remainder$axis=="Spat-B"),]
+remainder <-remainder[!(remainder$axis=="DLR-B"),]
+
+remainder$axis <- plyr::mapvalues(remainder$axis, from = c("Spat-L","K-L","DLR-L","Spat-T","K-T","DLR-T"),
+                            to = c("Spatial - L","Temporal - L","ST - L","Spatial - T","Temporal - T","ST - T"))
+level_order <- factor(remainder$axis, level = c("Spatial - L","Spatial - T","Temporal - L","Temporal - T","ST - L","ST - T"))
+
+remove(df)
+remove(tmp1)
+remove(tmp2)
+tmp1 <- remainder
+tmp2 <- tmp1[(mean <= 2), F := "Other"]
+``` 
+
+
+##### Rename the columns and only filter phyla of interest:
+
+* `Acidobacteriota`
+* `Actinobacteriota`
+* `Bacteroidota`
+* `Dependentiae`
+* `Firmicutes`
+* `Proteobacteria`
+* `Unclassified`: all unclassified phyla
+* `Other Phyla`: phyla besides the ones listed above were merged here.
+
+Furthermore, family columns are renamed to be more readable
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide'}
+df <- tmp2
+names(df)[names(df) == "P"] <- "Phylum"
+names(df)[names(df) == "F"] <- "Family"
+df$group <- paste0(df$Phylum, "-", df$Family, sep = "")
+sort(unique(df$group))
+cat(paste(shQuote(sort(unique(df$Phylum)), type="cmd"), collapse=", "))
+
+#test
+phylums <- c("Acidobacteriota", "Actinobacteriota","Bacteroidota", "Dependentiae",
+             "Firmicutes", "Proteobacteria", "Unclassified")
+
+
+df$Family[df$Phylum=="Acidobacteriota" & df$Family=='Acidobacteriota-Other'] <- "Other Acidobacteria"
+
+df$Family[df$Phylum=="Actinobacteriota" & df$Family=='Actinobacteriota-Other'] <- "Other Actinobacteriota"
+
+df$Family[df$Phylum=="Bacteroidota" & df$Family=='Bacteroidota-Other'] <- "Other Bacteroidota"
+
+df$Family[df$Phylum=="Dependentiae" & df$Family=='Dependentiae-Other'] <- "Other Dependentiae"
+
+df$group[df$group=='Firmicutes-Other'] <- "Firmicutes"
+
+df$Family[df$Phylum=="Proteobacteria" & df$Family=='Proteobacteria-Other'] <- "Other Proteobacteria"
+
+df$group[df$group=='Unclassified-Other'] <- "Unclassified"
+
+df$group[!df$Phylum %in% phylums] <- "Other Phyla"
+
+
+df2 <- select(df, axis, Phylum, Family, Abundance, group) %>%
+  mutate(Phylum=factor(Phylum, levels=c(phylums, "Others")),
+         Family=fct_reorder(Family, 10*as.integer(Phylum) + grepl("Others", Family)))
+df2$group[df2$group=="Proteobacteria-UnknownFamily"] <- "Proteobacteria-Unknown_Family"
+df2$group[df2$group=="Proteobacteria-Unknown_Family"] <-"Proteobacteria-Unknown_Family"
+```
+
+##### Colors are chosen for the families and the barplot created:
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide'}
+sort(unique(df2$group))
+colours <- c("chartreuse1","chartreuse3", #Acidobacteriota
+             "chocolate1","chocolate4", #Actinobacteriota
+             "royalblue1","royalblue3","royalblue4", #Bacteroidota
+             "seagreen1","seagreen4", #Dependentiae
+             "black", #Firmicutes
+             "khaki", #Other
+             plasma(13), #Proteobacteria
+             "black") #Unclassified
+
+png("relative_abundance_barplot_compartment_alltrials_family.png", width = 1600, height = 1000)
+ggplot(df2, aes(x=level_order, y=Abundance, fill=group, order=group)) + 
+  geom_bar(aes(fill=group), stat="identity", position="stack") + 
+  theme_classic() +
+  theme(legend.title = element_text(size = 30),
+        legend.position ="right", 
+        legend.text = element_text(size = 20),
+        legend.key.size = unit(1, "cm"),
+        legend.key.width = unit(1,"cm"),
+        axis.text.x = element_text(face = "bold", size = 18, angle=45, vjust = 0.5),
+        axis.title = element_text(face = "bold", size = 16),
+        title = element_text(face = "bold", size = 20),
+        strip.text = element_text(size = 16)) + theme(axis.text.x = element_text(angle=75, vjust = 0.5)) +
+  scale_fill_manual("", values=colours) +
+  scale_x_discrete("") +
+  theme(axis.text.x = element_text(angle=55, vjust=0.5, size=30, colour = "black"), 
+    axis.text.y = element_text(size = 22, face = "bold", colour = "black"),
+    axis.title.y = element_text(size = 26, face = "bold", colour = "black")) +  
+  scale_y_continuous("Relative Abundance [%]", breaks=seq(0,100,5), limits = c(0, 101), expand = c(0,2)) +
+  guides(fill=guide_legend(nrow=length(unique(df2$group)))) + labs(fill = "Family") +
+  geom_vline(xintercept = c(2.5,4.5), color = "black", size=3)
+dev.off()
+```
+
+
+--------------------
+
+### Differential abundance analysis at phylum level:
+
+##### Statisical anaylsis
+
+**Figure 1 B**: First the statistical analysis is done for each trial at phylum level and the exported as .csv file
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide', warning=FALSE}
+
+# Spatial Trial: -----------------------------------------------------------------
+ps <- spatial
+pseq <- subset_samples(ps, compartment!="B") 
+genus_data <- tax_glom(pseq, taxrank <- rank_names(pseq)[2], NArm = FALSE)
+var1 <- "compartment"
+
+sample_data(genus_data)$root_section <- factor(sample_data(genus_data)$root_section, levels = 
+                                                 c("< 1 mm", "1-2 mm", "2-4 mm", "> 4 mm"))
+sample_data(genus_data)$tree <- factor(sample_data(genus_data)$tree, levels = 
+                                                 c("T1", "T2", "T3", "T4"))
+sample_data(genus_data)$compartment <- factor(sample_data(genus_data)$compartment, levels = 
+                                         c("L", "T"))
+
+# Run ancombc function
+out = ancombc(phyloseq = genus_data, formula = "compartment + tree + root_section",
+              p_adj_method = "holm", zero_cut = 0.90, lib_cut = 10000,
+              group = var1, struc_zero = TRUE, neg_lb = FALSE,
+              tol = 1e-5, max_iter = 100, conserve = TRUE,
+              alpha = 0.05, global = FALSE)
+res = out$res
+
+#Coefficients
+tab_coef = res$W
+colnames(tab_coef) 
+col_name = c("L - T",
+  "T1 - T2", "T1 - T3", "T1 - T4", 
+  "R1 - R2", "R1 - R3", "R1 - R4")
+colnames(tab_coef) = col_name
+
+source("ancom_bc_rename_variables.R", echo = T, spaced = T)
+
+tmp <- tab_diff
+tmp2 <- merge(tmp, tab_w, by=0) 
+rownames(tmp2) <- tmp2$Row.names
+tmp2$Row.names = NULL
+
+tmp3 <- as.data.frame(tax_table(genus_data))
+tmp4 <- merge(tmp3, tmp2, by=0) 
+rownames(tmp4) <- tmp4$Row.names
+tmp4$Row.names = NULL
+tmp4 <- tmp4[,-c(1,3:7)]
+
+PGroup <- transform_sample_counts(genus_data, function(x)100* x / sum(x))
+OTUg <- otu_table(PGroup)
+TAXg <- tax_table(PGroup)
+AverageD <- as.data.frame(rowMeans(OTUg))
+names(AverageD) <- c("Mean")
+SD <- as.data.frame(rowSds(OTUg),na.rm = T)
+names(SD) <- c("SD")
+tmp <- cbind(AverageD,SD)
+GTable <- merge(TAXg, tmp, by=0, all=TRUE)
+rownames(GTable) <- GTable$Row.names
+GTable$Row.names = NULL
+GTable <- GTable[,-c(1,3:7)]
+
+tmp5 <- merge(tmp4, GTable, by=0) 
+row.names(tmp5) <- tmp5$Row.names
+tmp5$Row.names = NULL
+tmp6 <- tmp5[,c(1:2,9,17:18)]
+spat <- tmp6[order(tmp6$Mean, decreasing = TRUE),]
+
+write_csv(spat, file = paste0("ancombc_spat_top_phyla.csv"))
+
+
+# Temporal Trial: -----------------------------------------------------------------
+ps <- temporal
+pseq <- subset_samples(ps, compartment!="B") 
+genus_data <- tax_glom(pseq, taxrank <- rank_names(pseq)[2], NArm = FALSE)
+var1 <- "compartment"
+
+# Run ancombc function
+out = ancombc(phyloseq = genus_data, formula = "compartment + plant + timepoint_cat",
+              p_adj_method = "holm", zero_cut = 0.90, lib_cut = 10000,
+              group = var1, struc_zero = TRUE, neg_lb = FALSE,
+              tol = 1e-5, max_iter = 100, conserve = TRUE,
+              alpha = 0.05, global = FALSE)
+res = out$res
+
+#Coefficients
+tab_coef = res$W
+colnames(tab_coef) 
+col_name = c("L - T", "B1 - B2","B1 - B3","B1 - B4","B1 - B5","B1 - B6", "Timepoint")
+colnames(tab_coef) = col_name
+
+source("ancom_bc_rename_variables.R", echo = T, spaced = T)
+
+tmp <- tab_diff
+tmp2 <- merge(tmp, tab_w, by=0) 
+rownames(tmp2) <- tmp2$Row.names
+tmp2$Row.names = NULL
+
+tmp3 <- as.data.frame(tax_table(genus_data))
+tmp4 <- merge(tmp3, tmp2, by=0) 
+rownames(tmp4) <- tmp4$Row.names
+tmp4$Row.names = NULL
+tmp4 <- tmp4[,-c(1,3:8)]
+
+PGroup <- transform_sample_counts(genus_data, function(x)100* x / sum(x))
+OTUg <- otu_table(PGroup)
+TAXg <- tax_table(PGroup)
+AverageD <- as.data.frame(rowMeans(OTUg))
+names(AverageD) <- c("Mean")
+SD <- as.data.frame(rowSds(OTUg),na.rm = T)
+names(SD) <- c("SD")
+tmp <- cbind(AverageD,SD)
+GTable <- merge(TAXg, tmp, by=0, all=TRUE)
+rownames(GTable) <- GTable$Row.names
+GTable$Row.names = NULL
+GTable <- GTable[,-c(1,3:8)]
+
+tmp5 <- merge(tmp4, GTable, by=0) 
+row.names(tmp5) <- tmp5$Row.names
+tmp5$Row.names = NULL
+tmp6 <- tmp5[,c("P.x","L - T.x","L - T.y","Mean","SD")]
+temp <- tmp6[order(tmp6$Mean, decreasing = TRUE),]
+
+write_csv(temp, file = paste0("ancombc_temp_top_phyla.csv"))
+
+
+# Spatio-temporal: -----------------------------------------------------------------
+ps <- st.trial
+sample_data(ps)$tree_cat <- revalue(sample_data(ps)$tree_cat, 
+                                    c("T44"="T1", "T51"="T2", "T52"="T3", "T57"="T4", "T63"="T5", "T64"="T6", "T71"="T7", "T72"="T8", "T81"="T9", "T85"="T10"))
+
+sample_data(ps)$sample_time_cat <- revalue(sample_data(ps)$sample_time_cat, 
+                                           c("S_4"="TP1", "S_5"="TP2", "S_6"="TP3", "S_7"="TP4"))
+
+sample_data(ps)$compartment <- factor(sample_data(ps)$compartment, levels = 
+                                                c("L", "T"))
+
+pseq <- subset_samples(ps, compartment!="B") 
+genus_data <- tax_glom(pseq, taxrank <- rank_names(pseq)[2], NArm = FALSE)
+var1 <- "compartment"
+
+# Run ancombc function
+out = ancombc(phyloseq = genus_data, formula = "compartment + tree_cat + sample_time_cat + rootpart",
+              p_adj_method = "holm", zero_cut = 0.90, lib_cut = 10000,
+              group = var1, struc_zero = TRUE, neg_lb = FALSE,
+              tol = 1e-5, max_iter = 100, conserve = TRUE,
+              alpha = 0.05, global = FALSE)
+res = out$res
+
+#Coefficients
+tab_coef = res$W
+colnames(tab_coef) 
+col_name = c("L - T",
+             "T1 - T2","T1 - T3","T1 - T4","T1 - T5","T1 - T6","T1 - T7","T1 - T8","T1 - T9","T1 - T10",
+             "TP1 - TP2", "TP1 - TP3", "TP1 - TP4", "Fine roots - Thick roots")
+colnames(tab_coef) = col_name
+
+source("ancom_bc_rename_variables.R", echo = T, spaced = T)
+
+tmp <- tab_diff
+tmp2 <- merge(tmp, tab_w, by=0) 
+rownames(tmp2) <- tmp2$Row.names
+tmp2$Row.names = NULL
+
+tmp3 <- as.data.frame(tax_table(genus_data))
+tmp4 <- merge(tmp3, tmp2, by=0) 
+rownames(tmp4) <- tmp4$Row.names
+tmp4$Row.names = NULL
+tmp4 <- tmp4[,-c(1,3:8)]
+
+PGroup <- transform_sample_counts(genus_data, function(x)100* x / sum(x))
+OTUg <- otu_table(PGroup)
+TAXg <- tax_table(PGroup)
+AverageD <- as.data.frame(rowMeans(OTUg))
+names(AverageD) <- c("Mean")
+SD <- as.data.frame(rowSds(OTUg),na.rm = T)
+names(SD) <- c("SD")
+tmp <- cbind(AverageD,SD)
+GTable <- merge(TAXg, tmp, by=0, all=TRUE)
+rownames(GTable) <- GTable$Row.names
+GTable$Row.names = NULL
+GTable <- GTable[,-c(1,3:8)]
+
+tmp5 <- merge(tmp4, GTable, by=0) 
+row.names(tmp5) <- tmp5$Row.names
+tmp5$Row.names = NULL
+tmp6 <- tmp5[,c("P.x","L - T.x","L - T.y","Mean","SD")]
+DLR <- tmp6[order(tmp6$Mean, decreasing = TRUE),]
+
+write_csv(DLR, file = paste0("ancombc_DLR_top_phyla.csv"))
+```
+
+
+##### Merge the three files into a single file
+
+Also, phyla with a relative abundance <2 are excluded
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide', warning=FALSE}
+spat <- read.table(file = "ancombc_spat_top_phyla.csv", header=T, sep = ",")
+temp <- read.table(file = "ancombc_temp_top_phyla.csv", header=T, sep = ",")
+DLR <- read.table(file = "ancombc_DLR_top_phyla.csv", header=T, sep = ",")
+colnames(spat) <- c("Phylum","spat_sig","spat_W","Spatial Mean","Spatial SD")
+colnames(temp) <- c("Phylum","temp_sig","temp_W","Temporal Mean","Temporal SD")
+colnames(DLR) <- c("Phylum","DLR_sig","DLR_W","DLR Mean","DLR SD")
+
+tmp <- merge(spat, temp, by="Phylum", all=TRUE)
+tmp <- merge(tmp, DLR, by="Phylum", all=TRUE)
+tmp[30,1] <- "Unclassified"
+row.names(tmp) <- tmp$Phylum
+tmp$Phylum = NULL
+
+tmp$Average <- as.numeric(rowMeans(tmp[c(3,7,11)],))
+
+tmp2 <- tmp[tmp$Average>2,]
+tmp3 <- na.omit(tmp2)
+```
+
+
+##### Create the heatmap
+
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, warning=FALSE}
+mat.df <- tmp3#[-c(5,7,8),]
+str(mat.df)
+
+colnames(mat.df) <- c("spat_sig", "Spat: L -> T", "Spatial Mean", "Spatial SD",
+                      "temp_sig", "Temporal: L -> T","Temporal Mean", "Temporal SD",
+                      "DLR_sig", "ST: L -> T", "DLR Mean", "DLR SD", "Average")
+
+col.order <- c("Spat: L -> T","Temporal: L -> T","ST: L -> T")
+mat.diff <- as.matrix(mat.df[,c(2,6,10)])
+sig_mat <- as.matrix(mat.df[,c(1,5,9)])
+min_lc <- min(mat.diff, na.rm = T)
+max_lc <- max(mat.diff, na.rm = T)
+colors <- colorRamp2(c(min_lc, 0, max_lc), c("blue", "white", "red"))
+
+hb1 = rowAnnotation("Mean Abundance [%]" = anno_barplot(as.vector(mat.df$Average),gp = gpar(fill = "black"), bar_width = 0.9, extend=0.1, axis_param = list(side = "bottom", labels_rot = 90, gp = gpar(fontsize = 26)), width = unit(10, "cm")), annotation_name_gp = gpar(fontsize = 26, fontface = "bold"), annotation_name_side = "top", annotation_name_offset = unit(0.3, "cm"), annotation_name_rot = 0)
+
+lgd = Legend(at = c(round(min_lc+min_lc*0.05,digits = 2), 0, round(max_lc+max_lc*0.05, digits = 2)),  col_fun = colors, 
+             title = "W-value", title_gp = gpar(fontsize = 26, fontface = "bold"), title_gap = unit(0.5, "cm"),
+             labels_gp = gpar(col = "black", fontsize = 26, fontface = "bold"), title_position = "topcenter", 
+             grid_height = unit(3, "cm"), legend_width = unit(10, "cm"), direction = "horizontal") 
+
+ht = Heatmap(mat.diff , name = "logfold change",
+             column_gap = unit(5, "mm"),
+             row_gap = unit(5, "mm"), 
+             row_names_gp = gpar(fontsize = 32, fontface = "bold"),
+             na_col = "grey",
+             column_order = col.order,
+             col = colors,
+             rect_gp = gpar(col = "white", lwd = 2), #white spaces in between
+             border = TRUE, 
+             cluster_rows = FALSE, #remove cluster         
+             show_column_dend = FALSE, #remove cluster 
+             show_heatmap_legend = FALSE, #r emove legend
+             row_names_side = "right",
+             row_names_max_width = unit(2, "cm"),
+             row_names_rot = 0,
+             row_names_centered = FALSE,
+             row_title_gp = gpar(fontsize = 28),
+             row_title_rot = 0,
+             column_title = paste0("ANCOM-BC W-value"), 
+             column_title_gp = gpar(fill = "black", col = "white", fontsize = 28, fontface = "bold", border = "black"), 
+             column_title_side = "top",
+             column_names_max_height = unit(6, "cm"),
+             column_names_gp = gpar(fontsize = 32, fontface = "bold", col = "black"),
+             column_names_rot = 25,
+             column_names_centered = TRUE,
+             show_parent_dend_line = FALSE, 
+             cell_fun = function(j, i, x, y, width, height, fill) {
+               if(sig_mat[i, j] == "TRUE")
+                 grid.text("*", x, y, gp = gpar(fontsize = 30, fontface = "bold"))
+             }
+             )
+png("LT-comparison-phylum.png", width = 2000, height = 400+45*(nrow(mat.diff)))
+draw(ht, padding = unit(c(5, 1, 1, 20), "cm")) # add space for titles
+draw(lgd, x = unit(54, "cm"), y = unit(6.5, "cm"))
+dev.off()
+```
+
+
+### Differential abundance analysis at family level:
+
+##### Statisical anaylsis
+
+**Figure S4**: First the statistical analysis is done for each trial at family level and the exported as .csv file
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide', warning=FALSE}
+# Spatial Trial: -----------------------------------------------------------------
+ps <- spatial
+pseq <- subset_samples(ps, compartment!="B") 
+genus_data <- tax_glom(pseq, taxrank <- rank_names(pseq)[5], NArm = FALSE)
+var1 <- "compartment"
+
+sample_data(genus_data)$root_section <- factor(sample_data(genus_data)$root_section, levels = 
+                                                 c("< 1 mm", "1-2 mm", "2-4 mm", "> 4 mm"))
+sample_data(genus_data)$tree <- factor(sample_data(genus_data)$tree, levels = 
+                                                 c("T1", "T2", "T3", "T4"))
+sample_data(genus_data)$compartment <- factor(sample_data(genus_data)$compartment, levels = 
+                                         c("L", "T"))
+
+# Run ancombc function
+out = ancombc(phyloseq = genus_data, formula = "compartment + tree + root_section",
+              p_adj_method = "holm", zero_cut = 0.90, lib_cut = 10000,
+              group = var1, struc_zero = TRUE, neg_lb = FALSE,
+              tol = 1e-5, max_iter = 100, conserve = TRUE,
+              alpha = 0.05, global = FALSE)
+res = out$res
+
+#Coefficients
+tab_coef = res$W
+colnames(tab_coef) 
+col_name = c("L - T",
+  "T1 - T2", "T1 - T3", "T1 - T4", 
+  "R1 - R2", "R1 - R3", "R1 - R4")
+colnames(tab_coef) = col_name
+
+source("ancom_bc_rename_variables.R", echo = T, spaced = T)
+
+tmp <- tab_diff
+tmp2 <- merge(tmp, tab_w, by=0) 
+rownames(tmp2) <- tmp2$Row.names
+tmp2$Row.names = NULL
+
+tmp3 <- as.data.frame(tax_table(genus_data))
+tmp4 <- merge(tmp3, tmp2, by=0) 
+rownames(tmp4) <- tmp4$Row.names
+tmp4$Row.names = NULL
+tmp4 <- tmp4[,-c(1,6:7)]
+
+PGroup <- transform_sample_counts(genus_data, function(x)100* x / sum(x))
+OTUg <- otu_table(PGroup)
+TAXg <- tax_table(PGroup)
+AverageD <- as.data.frame(rowMeans(OTUg))
+names(AverageD) <- c("Mean")
+SD <- as.data.frame(rowSds(OTUg),na.rm = T)
+names(SD) <- c("SD")
+tmp <- cbind(AverageD,SD)
+GTable <- merge(TAXg, tmp, by=0, all=TRUE)
+rownames(GTable) <- GTable$Row.names
+GTable$Row.names = NULL
+GTable <- GTable[,-c(1,6:7)]
+
+tmp5 <- merge(tmp4, GTable, by=0) 
+row.names(tmp5) <- tmp5$Row.names
+tmp5$Row.names = NULL
+tmp6 <- tmp5[,c(1:5,12,23:24)]
+spat <- tmp6[order(tmp6$Mean, decreasing = TRUE),]
+write_csv(spat, file = "spatial_top_families.csv")
+
+
+# Temporal: -----------------------------------------------------------------
+ps <- temporal
+pseq <- subset_samples(ps, compartment!="B") 
+genus_data <- tax_glom(pseq, taxrank <- rank_names(pseq)[5], NArm = FALSE)
+var1 <- "compartment"
+
+sample_data(genus_data)$timepoint <- factor(sample_data(genus_data)$timepoint, levels = 
+                                              c("TP1","TP2","TP3","TP4","TP5","TP6","TP7","TP8","TP9","TP10","TP11","TP12"))
+
+# Run ancombc function
+out = ancombc(phyloseq = genus_data, formula = "compartment + plant + timepoint_cat",
+              p_adj_method = "holm", zero_cut = 0.90, lib_cut = 10000,
+              group = var1, struc_zero = TRUE, neg_lb = FALSE,
+              tol = 1e-5, max_iter = 100, conserve = TRUE,
+              alpha = 0.05, global = FALSE)
+res = out$res
+
+#Coefficients
+tab_coef = res$W
+colnames(tab_coef) 
+col_name = c("L - T", "B1 - B2","B1 - B3","B1 - B4","B1 - B5","B1 - B6",
+             "TP1 - TP2", "TP1 - TP3", "TP1 - TP4", "TP1 - TP5", "TP1 - TP6", "TP1 - TP7",
+             "TP1 - TP8", "TP1 - TP9", "TP1 - TP10", "TP1 - TP11", "TP1 - TP12")
+colnames(tab_coef) = col_name
+
+source("ancom_bc_rename_variables.R", echo = T, spaced = T)
+
+tmp <- tab_diff
+tmp2 <- merge(tmp, tab_w, by=0) 
+rownames(tmp2) <- tmp2$Row.names
+tmp2$Row.names = NULL
+
+tmp3 <- as.data.frame(tax_table(genus_data))
+tmp4 <- merge(tmp3, tmp2, by=0) 
+rownames(tmp4) <- tmp4$Row.names
+tmp4$Row.names = NULL
+tmp4 <- tmp4[,-c(1,6:8)]
+
+PGroup <- transform_sample_counts(genus_data, function(x)100* x / sum(x))
+OTUg <- otu_table(PGroup)
+TAXg <- tax_table(PGroup)
+AverageD <- as.data.frame(rowMeans(OTUg))
+names(AverageD) <- c("Mean")
+SD <- as.data.frame(rowSds(OTUg),na.rm = T)
+names(SD) <- c("SD")
+tmp <- cbind(AverageD,SD)
+GTable <- merge(TAXg, tmp, by=0, all=TRUE)
+rownames(GTable) <- GTable$Row.names
+GTable$Row.names = NULL
+GTable <- GTable[,-c(1,6:8)]
+
+tmp5 <- merge(tmp4, GTable, by=0) 
+row.names(tmp5) <- tmp5$Row.names
+tmp5$Row.names = NULL
+tmp6 <- tmp5[,c("P.x","C.x","O.x","F.x","L - T.x","L - T.y","Mean","SD")]
+temp <- tmp6[order(tmp6$Mean, decreasing = TRUE),]
+write_csv(temp, file = "temporal_top_families.csv")
+
+
+# Spatio-temporal: -----------------------------------------------------------------
+ps <- st.trial
+pseq <- subset_samples(ps, compartment!="B") 
+genus_data <- tax_glom(pseq, taxrank <- rank_names(pseq)[5], NArm = FALSE)
+var1 <- "compartment"
+
+# Run ancombc function
+out = ancombc(phyloseq = genus_data, formula = "compartment + tree_cat + sample_time_cat + rootpart",
+              p_adj_method = "holm", zero_cut = 0.90, lib_cut = 10000,
+              group = var1, struc_zero = TRUE, neg_lb = FALSE,
+              tol = 1e-5, max_iter = 100, conserve = TRUE,
+              alpha = 0.05, global = FALSE)
+res = out$res
+
+#Coefficients
+tab_coef = res$W
+colnames(tab_coef) 
+col_name = c("L - T", "T1 - T2","T1 - T3","T1 - T4","T1 - T5","T1 - T6","T1 - T7","T1 - T8","T1 - T9","T1 - T10",
+             "TP1 - TP2", "TP1 - TP3", "TP1 - TP4",
+             "Fine roots - Thick roots")
+colnames(tab_coef) = col_name
+
+source("ancom_bc_rename_variables.R", echo = T, spaced = T)
+
+tmp <- tab_diff
+tmp2 <- merge(tmp, tab_w, by=0) 
+rownames(tmp2) <- tmp2$Row.names
+tmp2$Row.names = NULL
+
+tmp3 <- as.data.frame(tax_table(genus_data))
+tmp4 <- merge(tmp3, tmp2, by=0) 
+rownames(tmp4) <- tmp4$Row.names
+tmp4$Row.names = NULL
+tmp4 <- tmp4[,-c(1,6:8)]
+
+PGroup <- transform_sample_counts(genus_data, function(x)100* x / sum(x))
+OTUg <- otu_table(PGroup)
+TAXg <- tax_table(PGroup)
+AverageD <- as.data.frame(rowMeans(OTUg))
+names(AverageD) <- c("Mean")
+SD <- as.data.frame(rowSds(OTUg),na.rm = T)
+names(SD) <- c("SD")
+tmp <- cbind(AverageD,SD)
+GTable <- merge(TAXg, tmp, by=0, all=TRUE)
+rownames(GTable) <- GTable$Row.names
+GTable$Row.names = NULL
+GTable <- GTable[,-c(1,6:8)]
+
+tmp5 <- merge(tmp4, GTable, by=0) 
+row.names(tmp5) <- tmp5$Row.names
+tmp5$Row.names = NULL
+tmp6 <- tmp5[,c("P.x","C.x","O.x","F.x","L - T.x","L - T.y","Mean","SD")]
+DLR <- tmp6[order(tmp6$Mean, decreasing = TRUE),]
+write_csv(DLR, file = "DLR_top_families.csv")
+```
+
+##### Merge the three files into a single file
+
+Also, families with a relative abundance <0.5% are excluded 
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, results='hide', warning=FALSE}
+for (comp in c("spatial","temporal", "DLR")){
+  
+  p.colors <- read.table("phyla_colors.tsv", header=T)
+  ###ANCOM results
+  ancom <- read.csv(file = paste0(comp,"_top_families.csv"))
+  ancom$Phylum <- ancom$P.x
+  ancom <- merge(ancom, p.colors, by="Phylum", all.y = T, )
+  ancom$F.x[ancom$F.x=="uncultured"] <- "Unclassified"
+  ancom$F.x[is.na(ancom$F.x)] <- "Unclassified"
+  ancom <- add_column(ancom, Name = ancom$F.x, .after = "F.x")
+  ancom <- na.omit(ancom[ancom$Mean>0.5,])
+  #select only root section columns
+  write_csv(ancom[,-2], file = paste0(comp,"_top_families_mod.csv"))
+  #redo in excel! -> specify family names!
+}
+
+spat <- read.csv("spatial_top_families_mod.csv")[,-7]
+temp <- read.csv("temporal_top_families_mod.csv")[,-7]
+DLR <- read.csv("DLR_top_families_mod.csv")[,-7]
+
+colnames(spat) <- c("Phylum","Name","spat_sig","spat_W","Spatial Mean","Spatial SD")
+colnames(temp) <- c("Phylum","Name","temp_sig","temp_W","Temporal Mean","Temporal SD")
+colnames(DLR) <- c("Phylum","Name","DLR_sig","DLR_W","DLR Mean","DLR SD")
+
+tmp <- merge(spat, temp, by="Name", all.y =T, all.x = T)
+tmp <- merge(tmp, DLR, by="Name", all.y=T, all.x = T)
+tmp <- merge(tmp, p.colors, by="Phylum", all.y = T, )
+tmp$Average <- as.numeric(rowMeans(tmp[c(7,11,15)],na.rm = TRUE))
+row.names(tmp) <- tmp$Name
+tmp$Name = NULL
+tmp2 <- tmp
+
+row.names(tmp2) <- tmp2$Name
+tmp2$Name = NULL
+tmp2[["spat_sig"]][is.na(tmp2[["spat_sig"]])] <- FALSE
+tmp2[["temp_sig"]][is.na(tmp2[["temp_sig"]])] <- FALSE
+tmp2[["DLR_sig"]][is.na(tmp2[["DLR_sig"]])] <- FALSE
+
+ancom <- tmp2[(rowSums(tmp2[,c(2,6,10)])!=0),]
+```
+
+
+##### Create the heatmap
+
+```{r, cache=TRUE, message=FALSE, echo=TRUE, warning=FALSE}
+mat.df <- ancom
+str(mat.df)
+
+colnames(mat.df) <- c("Phylum","spat_sig", "Spat: L -> T", "Spatial Mean", "Spatial SD",
+                      "temp_sig", "Temporal: L -> T","Temporal Mean", "Temporal SD",
+                      "DLR_sig", "ST: L -> T", "DLR Mean", "DLR SD", "P.color", "Average")
+
+#IMPORTANT: specify ONLY the columns with the differentials
+col.order <- c("Spat: L -> T","Temporal: L -> T","ST: L -> T")
+mat.diff <- as.matrix(mat.df[,c(3,7,11)])
+sig_mat <- as.matrix(mat.df[,c(2,6,10)])
+sig_mat[is.na(sig_mat)] <- FALSE
+min_lc <- min(mat.diff, na.rm = T)
+max_lc <- max(mat.diff, na.rm = T)
+colors <- colorRamp2(c(min_lc, 0, max_lc), c("blue", "white", "red"))
+
+hb1 = rowAnnotation("Spatial: Mean\n Abundance [%]" = anno_barplot(as.vector(mat.df$'Spatial Mean'), ylim = c(0,10), gp = gpar(fill = "black"), bar_width = 0.9, extend=0.1, axis_param = list(side = "bottom", labels_rot = 90, gp = gpar(fontsize = 32)), width = unit(10, "cm")), annotation_name_gp = gpar(fontsize = 32, fontface = "bold"), annotation_name_side = "top", annotation_name_offset = unit(0.3, "cm"), annotation_name_rot = 0)
+
+hb2 = rowAnnotation("Temporal: Mean\n Abundance [%]" = anno_barplot(as.vector(mat.df$'Temporal Mean'), ylim = c(0,10), gp = gpar(fill = "black"), bar_width = 0.9, extend=0.1, axis_param = list(side = "bottom", labels_rot = 90, gp = gpar(fontsize = 32)), width = unit(10, "cm")), annotation_name_gp = gpar(fontsize = 32, fontface = "bold"), annotation_name_side = "top", annotation_name_offset = unit(0.3, "cm"), annotation_name_rot = 0)
+
+hb3 = rowAnnotation("ST: Mean\n Abundance [%]" = anno_barplot(as.vector(mat.df$'DLR Mean'), ylim = c(0,10), gp = gpar(fill = "black"), bar_width = 0.9, extend=0.1, axis_param = list(side = "bottom", labels_rot = 90, gp = gpar(fontsize = 32)), width = unit(10, "cm")), annotation_name_gp = gpar(fontsize = 32, fontface = "bold"), annotation_name_side = "top", annotation_name_offset = unit(0.3, "cm"), annotation_name_rot = 0)
+
+lgd = Legend(at = c(round(min_lc+min_lc*0.05,digits = 2), 0, round(max_lc+max_lc*0.05, digits = 1)),  col_fun = colors, 
+             title = "W-value", title_gp = gpar(fontsize = 32, fontface = "bold"), title_gap = unit(0.5, "cm"),
+             labels_gp = gpar(col = "black", fontsize = 28, fontface = "bold"), title_position = "topcenter", 
+             grid_height = unit(3, "cm"), legend_width = unit(10, "cm"), direction = "horizontal") 
+
+ht = Heatmap(mat.diff , name = "logfold change",
+             column_gap = unit(5, "mm"),
+             row_gap = unit(5, "mm"), 
+             row_split = mat.df$Phylum,
+             row_names_gp = gpar(fontsize = 36, fontface = "italic", 
+                                 col = mat.df$`P.color`),
+             na_col = "grey",
+             column_order = col.order,
+             col = colors,
+             rect_gp = gpar(col = "white", lwd = 2), #white spaces in between
+             border = TRUE, 
+             cluster_rows = FALSE, #remove cluster         
+             show_column_dend = FALSE, #remove cluster 
+             show_heatmap_legend = FALSE, #remove legend
+             row_names_side = "right",
+             row_names_max_width = unit(2, "cm"),
+             row_names_rot = 0,
+             row_names_centered = FALSE,
+             row_title_gp = gpar(fontsize = 36, fontface = "bold"),
+             row_title_rot = 0,
+             column_title = paste0("ANCOM-BC"), 
+             column_title_gp = gpar(fill = "black", col = "white", fontsize = 28, fontface = "bold", border = "black"), 
+             column_title_side = "top",
+             column_names_max_height = unit(6, "cm"),
+             column_names_gp = gpar(fontsize = 32, fontface = "bold", col = "black"),
+             column_names_rot = 90,
+             column_names_centered = TRUE,
+             show_parent_dend_line = FALSE, 
+             cell_fun = function(j, i, x, y, width, height, fill) {
+                if(sig_mat[i, j] == "TRUE")
+                  grid.text("*", x, y, gp = gpar(fontsize = 30, fontface = "bold"))
+             }, 
+             right_annotation = c(hb1,hb2,hb3))
+png("LT-comparison-family.png", width = 2400, height = 600+45*(nrow(mat.diff)))
+draw(ht, padding = unit(c(3, 1, 1, 30), "cm")) # add space for titles
+draw(lgd, x = unit(38, "cm"), y = unit(4, "cm"))
+dev.off()
+```
+
+
