@@ -58,7 +58,7 @@ library(dendsort)
 library(ComplexHeatmap)
 library(circlize)
 library(round)
-
+library(lme4)
 set.seed(225)
 ```
 
@@ -97,190 +97,48 @@ source('functions.R')
 
 **Loosely associated root microbiome:**  
 
-The following calculates the Kruskal-Wallis test statistics for the L-compartment:
-
-```{r, cache=TRUE}
-#L: make tibble
-mean(psL.meta$Shannon) 
-sd(psL.meta$Shannon) 
-psmeta.tib <- psL.meta %>%
-  select(c("tree_cat","rootpart","cluster1_cat","row","sample_time_cat","Shannon")) %>%
-  as_tibble()
-psmeta.tib <- psmeta.tib %>%
-  pivot_longer(-c(tree_cat,rootpart,cluster1_cat,sample_time_cat,row), names_to = "variables", values_to = "value")
-tmp2 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ tree_cat) %>%
-  add_column(factor = "plant")
-tmp3 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ rootpart) %>%
-  add_column(factor = "Root section")
-tmp4 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ cluster1_cat) %>%
-  add_column(factor = "Longitudinal position")
-tmp5 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ sample_time_cat) %>%
-  add_column(factor = "Sample Time")
-tmp6 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ row) %>%
-  add_column(factor = "Row")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp3),as_tibble(tmp4),as_tibble(tmp5),as_tibble(tmp6))
+First the number of days after the first sampling timepoint are added with the first one as zero
+```{r, cache=TRUE, warning = FALSE}
+psL.meta$days <- psL.meta$sample_time_cat
+psL.meta$days[psL.meta$days == "S_4"] <- 0
+psL.meta$days[psL.meta$days == "S_5"] <- 25
+psL.meta$days[psL.meta$days == "S_6"] <- 76
+psL.meta$days[psL.meta$days == "S_7"] <- 152
+psL.meta$days <- as.numeric(psL.meta$days)
 ```
 
-Dunn's test for multiple comparisons was not necessary as no factor was significant:
+The following fits a linear mixed-effects model on the Shannon diversity as response variable with the factors root section and sampling timepoint as fixed effects and the tree individual as random effect. Afterwards, ANOVA is performed on the model
 
+```{r, cache=TRUE, warning = FALSE}
+Model <- lmer(Shannon ~ rootpart * days + (1|tree_cat), data = psL.meta, REML = TRUE)
+anova(Model)
+```
+
+No significance was detected and thus, no Post-hoc tests were performed.
 <p>&nbsp;</p>
+
+
+
 **Tightly associated root microbiome:**  
 
-The following calculates the Kruskal-Wallis test statistics for the T-compartment:
-
-```{r, cache=TRUE}
-#T: make tibble
-mean(psT.meta$Shannon) 
-sd(psT.meta$Shannon) 
-psmeta.tib <- psT.meta %>%
-  select(c("tree_cat","rootpart","cluster1_cat","row","sample_time_cat","Shannon")) %>%
-  as_tibble()
-#extend table
-psmeta.tib <- psmeta.tib %>%
-  pivot_longer(-c(tree_cat,rootpart,cluster1_cat,sample_time_cat,row), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ tree_cat) %>%
-  add_column(factor = "plant")
-tmp3 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ rootpart) %>%
-  add_column(factor = "Root section")
-tmp4 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ cluster1_cat) %>%
-  add_column(factor = "Longitudinal position")
-tmp5 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ sample_time_cat) %>%
-  add_column(factor = "Sample Time")
-tmp6 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ row) %>%
-  add_column(factor = "Row")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp3),as_tibble(tmp4),as_tibble(tmp5),as_tibble(tmp6))
+First the number of days after the first sampling timepoint are added with the first one as zero
+```{r, cache=TRUE, warning = FALSE}
+psT.meta$days <- psT.meta$sample_time_cat
+psT.meta$days[psT.meta$days == "S_4"] <- 0
+psT.meta$days[psT.meta$days == "S_5"] <- 25
+psT.meta$days[psT.meta$days == "S_6"] <- 76
+psT.meta$days[psT.meta$days == "S_7"] <- 152
+psT.meta$days
 ```
 
-<p>&nbsp;</p>
-**L- and T-compartment of the different root sections (fine and thick roots):**
+The following fits a linear mixed-effects model on the Shannon diversity as response variable with the factors root section and sampling timepoint as fixed effects and the tree individual as random effect. Afterwards, ANOVA is performed on the model
 
-```{r, cache=TRUE}
-#L-compartment: Fine Roots
-psLF.meta$Shannon <- as.numeric(psLF.meta$shannon_entropy)
-mean(psLF.meta$Shannon) #8.014716
-sd(psLF.meta$Shannon) #0.5593245
-psmeta.tib <- psLF.meta %>%
-  select(c("tree_cat","cluster1_cat","sample_time_cat","Shannon")) %>%
-  as_tibble()
-#extend table
-psmeta.tib <- psmeta.tib %>%
-  pivot_longer(-c(tree_cat,cluster1_cat,sample_time_cat), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ tree_cat) %>%
-  add_column(factor = "plant")
-tmp4 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ cluster1_cat) %>%
-  add_column(factor = "Longitudinal position")
-tmp5 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ sample_time_cat) %>%
-  add_column(factor = "Sample Time")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp4),as_tibble(tmp5))
-
-#L-compartment: Thick Roots
-psLT.meta$Shannon <- as.numeric(psLT.meta$shannon_entropy)
-mean(psLT.meta$Shannon) #7.952086
-sd(psLT.meta$Shannon) #0.5677634
-psmeta.tib <- psLT.meta %>%
-  select(c("tree_cat","cluster1_cat","sample_time_cat","Shannon")) %>%
-  as_tibble()
-#extend table
-psmeta.tib <- psmeta.tib %>%
-  pivot_longer(-c(tree_cat,cluster1_cat,sample_time_cat), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ tree_cat) %>%
-  add_column(factor = "plant")
-tmp4 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ cluster1_cat) %>%
-  add_column(factor = "Longitudinal position")
-tmp5 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ sample_time_cat) %>%
-  add_column(factor = "Sample Time")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp4),as_tibble(tmp5))
-
-#T-compartment: Fine Roots
-psTF.meta$Shannon <- as.numeric(psTF.meta$shannon_entropy)
-mean(psTF.meta$Shannon) #8.014716
-sd(psTF.meta$Shannon) #0.5593245
-psmeta.tib <- psTF.meta %>%
-  select(c("tree_cat","cluster1_cat","sample_time_cat","Shannon")) %>%
-  as_tibble()
-#extend table
-psmeta.tib <- psmeta.tib %>%
-  pivot_longer(-c(tree_cat,cluster1_cat,sample_time_cat), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ tree_cat) %>%
-  add_column(factor = "plant")
-tmp4 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ cluster1_cat) %>%
-  add_column(factor = "Longitudinal position")
-tmp5 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ sample_time_cat) %>%
-  add_column(factor = "Sample Time")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp4),as_tibble(tmp5))
-
-#T-compartment: Thick Roots
-psTT.meta <- as.data.frame(read.delim("../QIIME_output/core-metrics/T-T-core-metrics-results/shannon_metadata.tsv")[-1,])
-psTT.meta$Shannon <- as.numeric(psTT.meta$shannon_entropy)
-mean(psTT.meta$Shannon) #7.545692
-sd(psTT.meta$Shannon) #0.7558885
-psmeta.tib <- psTT.meta %>%
-  select(c("tree_cat","cluster1_cat","sample_time_cat","Shannon")) %>%
-  as_tibble()
-#extend table
-psmeta.tib <- psmeta.tib %>%
-  pivot_longer(-c(tree_cat,cluster1_cat,sample_time_cat), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ tree_cat) %>%
-  add_column(factor = "plant")
-tmp4 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ cluster1_cat) %>%
-  add_column(factor = "Longitudinal position")
-tmp5 <- psmeta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ sample_time_cat) %>%
-  add_column(factor = "Sample Time")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp4),as_tibble(tmp5))
+```{r, cache=TRUE, warning = FALSE}
+Model <- lmer(Shannon ~ rootpart * days + (1|tree_cat), data = psT.meta, REML = TRUE)
+anova(Model)
 ```
 
-
-
-Dunn's test for multiple comparisons and plotting was not necessary as no factor was significant
+No significance was detected and thus, no Post-hoc tests were performed.
 
 <p>&nbsp;</p>
 
