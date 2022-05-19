@@ -58,6 +58,8 @@ library(dendsort)
 library(ComplexHeatmap)
 library(circlize)
 library(round)
+library(lme4)
+library(emmeans)
 
 set.seed(225)
 ```
@@ -89,64 +91,76 @@ source('functions.R')
 **Loosely associated root microbiome:**  
 The mean Shannon diversity for the L-compartment is `r mean(psL.meta$shannon)` with a standard deviation of `r sd(psL.meta$shannon)`
 
-The following calculates the Kruskal-Wallis test statistics for the L-compartment:
+The number of days after the first sampling date are added as numeric value
 
-```{r, cache=TRUE}
-ps.meta.tib <- psL.meta %>%
-  select(c("plant","timepoint","season","row","shannon")) %>% 
-  as_tibble()
-ps.meta.tib <- ps.meta.tib %>%
-  pivot_longer(-c(plant,timepoint,season,row), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- ps.meta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ plant) %>%
-  add_column(factor = "Tree")
-tmp3 <- ps.meta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ timepoint) %>%
-  add_column(factor = "Sampling Timepoint")
-tmp5 <- ps.meta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ row) %>%
-  add_column(factor = "Row")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp3),as_tibble(tmp5))
+```{r, cache=TRUE, warning = FALSE}
+psL.meta$timepoint <- as.numeric(psL.meta$timepoint)
+psL.meta$days <- psL.meta$timepoint
+psL.meta$days[psL.meta$days == 1] <- 1
+psL.meta$days[psL.meta$days == 2] <- 23
+psL.meta$days[psL.meta$days == 3] <- 43
+psL.meta$days[psL.meta$days == 4] <- 55
+psL.meta$days[psL.meta$days == 5] <- 76
+psL.meta$days[psL.meta$days == 6] <- 93
+psL.meta$days[psL.meta$days == 7] <- 119
+psL.meta$days[psL.meta$days == 8] <- 156
+psL.meta$days[psL.meta$days == 9] <- 211
+psL.meta$days[psL.meta$days == 10] <- 281
+psL.meta$days[psL.meta$days == 11] <- 300
+psL.meta$days[psL.meta$days == 12] <- 330
+psL.meta$days
 ```
 
-Dunn's test for multiple comparisons was not necessary as no factor was significant:
+The following fits a linear mixed-effects model on the Shannon diversity as response variable with the factors season and tree individual as fixed effects and the tree individual as random effect. The sampling timepoint as number of days after the first sampling date is added to adjust for temporal autocorrelation. Afterwards, ANOVA is performed on the model
 
+```{r, cache=TRUE, warning = FALSE}
+Model <- lme(shannon~plant+season, random =~ 1| plant, correlation=corAR1(form=~days), data= psL.meta, method="ML") 
+anova(Model)
+```
+
+The following computes estimated marginal means for the fixed factor of the linear model:
+
+```{r, cache=TRUE, warning = FALSE}
+emmeans(Model, specs = pairwise ~ season)
+```
 <p>&nbsp;</p>
+
+
 **Tightly associated root microbiome:**  
 The mean Shannon diversity for the T-compartment is `r mean(psT.meta$shannon)` with a standard deviation of `r sd(psT.meta$shannon)`
 
-The following calculates the Kruskal-Wallis test statistics for the T-compartment:
+The number of days after the first sampling date are added as numeric value
 
-```{r, cache=TRUE}
-ps.meta.tib <- psT.meta %>%
-  select(c("plant","timepoint","season","row","shannon")) %>% 
-  as_tibble()
-ps.meta.tib <- ps.meta.tib %>%
-  pivot_longer(-c(plant,timepoint,season,row), names_to = "variables", values_to = "value")
-#run kw test
-tmp2 <- ps.meta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ plant) %>%
-  add_column(factor = "Tree")
-tmp3 <- ps.meta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ timepoint) %>%
-  add_column(factor = "Sampling Timepoint")
-tmp5 <- ps.meta.tib %>%
-  group_by(variables) %>%
-  kruskal_test(value ~ row) %>%
-  add_column(factor = "Row")
-dplyr::bind_rows(as_tibble(tmp2),as_tibble(tmp3),as_tibble(tmp5))
+```{r, cache=TRUE, warning = FALSE}
+psT.meta$timepoint <- as.numeric(psT.meta$timepoint)
+psT.meta$days <- psT.meta$timepoint
+psT.meta$days[psT.meta$days == 1] <- 1
+psT.meta$days[psT.meta$days == 2] <- 23
+psT.meta$days[psT.meta$days == 3] <- 43
+psT.meta$days[psT.meta$days == 4] <- 55
+psT.meta$days[psT.meta$days == 5] <- 76
+psT.meta$days[psT.meta$days == 6] <- 93
+psT.meta$days[psT.meta$days == 7] <- 119
+psT.meta$days[psT.meta$days == 8] <- 156
+psT.meta$days[psT.meta$days == 9] <- 211
+psT.meta$days[psT.meta$days == 10] <- 281
+psT.meta$days[psT.meta$days == 11] <- 300
+psT.meta$days[psT.meta$days == 12] <- 330
+psT.meta$days
+psT.meta$days <- as.numeric(psT.meta$days)
 ```
 
+The following fits a linear mixed-effects model on the Shannon diversity as response variable with the factors season and tree individual as fixed effects and the tree individual as random effect. The sampling timepoint as number of days after the first sampling date is added to adjust for temporal autocorrelation. Afterwards, ANOVA is performed on the model
 
-The following performs Dunn's test for multiple comparisons between the sampling timepoint:
-```{r, cache=TRUE, cache=TRUE, warning = FALSE}
-dunn.test(psT.meta$shannon , psT.meta$date, method="bh", alpha=0.1, list=T, table = F)
+```{r, cache=TRUE, warning = FALSE}
+Model <- lme(shannon~plant+season, random =~ 1| plant, correlation=corAR1(form=~days), data= psT.meta, method="ML") 
+anova(Model)
+```
+
+The following computes estimated marginal means for the fixed factor of the linear model:
+
+```{r, cache=TRUE, warning = FALSE}
+emmeans(Model, specs = pairwise ~ season)
 ```
 <p>&nbsp;</p>
 
@@ -205,7 +219,7 @@ cap <- capscale(formula = RA.dist ~ de$plant + de$date, data = de, comm = RA.dis
 
 Furthermore, PERMANOVA is calculated on the distance matrix
 ```{r, cache=TRUE}
-adonis2(RA.dist ~ de$plant + de$date + de$row, data = de)
+adonis(formula = RA.dist ~ de$plant + de$date, permutations = 999, strata = de$plant)$aov.tab
 ```
 
 In addition, pairwise PERMANOVA is calculated for the sampling timepoint factor
@@ -272,7 +286,7 @@ cap <- capscale(formula = RA.dist ~ de$plant + de$date, data = de, comm = RA.dis
 
 Furthermore, PERMANOVA is calculated on the distance matrix
 ```{r, cache=TRUE}
-adonis2(RA.dist ~ de$plant + de$date + de$row, data = de)
+adonis(formula = RA.dist ~ de$plant + de$date, permutations = 999, strata = de$plant)$aov.tab
 ```
 
 In addition, pairwise PERMANOVA is calculated for the sampling timepoint factor
