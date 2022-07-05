@@ -346,7 +346,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP4-F - TP5-F", "TP4-F - TP6-F", "TP4-F - TP7-F", 
                "TP4-F - TP4-T", "TP4-F - TP5-T", "TP4-F - TP6-T", "TP4-F - TP7-T",
@@ -375,7 +375,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP5-F - TP4-F", "TP5-F - TP6-F", "TP5-F - TP7-F", 
                "TP5-F - TP4-T", "TP5-F - TP5-T", "TP5-F - TP6-T", "TP5-F - TP7-T",
@@ -404,7 +404,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP6-F - TP4-F", "TP6-F - TP5-F", "TP6-F - TP7-F", 
                "TP6-F - TP4-T", "TP6-F - TP5-T", "TP6-F - TP6-T", "TP6-F - TP7-T",
@@ -433,7 +433,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP7-F - TP4-F", "TP7-F - TP5-F", "TP7-F - TP6-F", 
                "TP7-F - TP4-T", "TP7-F - TP5-T", "TP7-F - TP6-T", "TP7-F - TP7-T",
@@ -462,7 +462,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP4-T - TP4-F", "TP4-T - TP5-F", "TP4-T - TP6-F", 
                "TP4-T - TP7-F", "TP4-T - TP5-T", "TP4-T - TP6-T", "TP4-T - TP7-T",
@@ -491,7 +491,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP5-T - TP4-F", "TP5-T - TP5-F", "TP5-T - TP6-F", 
                "TP5-T - TP7-F", "TP5-T - TP4-T", "TP5-T - TP6-T", "TP5-T - TP7-T",
@@ -520,7 +520,7 @@ for (comp in c("L","T")){
   res = out$res
   
   #Coefficients
-  tab_coef = res$beta
+  tab_coef = res$W
   colnames(tab_coef) 
   col_name = c("TP6-T - TP4-F", "TP6-T - TP5-F", "TP6-T - TP6-F", 
                "TP6-T - TP7-F", "TP6-T - TP4-T", "TP6-T - TP5-T", "TP6-T - TP7-T",
